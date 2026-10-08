@@ -1,0 +1,77 @@
+name: Build YASK USB WiFi
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y repo rsync aria2 zip
+
+          sudo fallocate -l 10G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+
+      - name: Clone YASK kernel source
+        run: |
+          git clone --recursive --depth=1 \
+            --branch builder \
+            https://github.com/topnotchfreaks/kernel_msm-5.15.git kernel
+
+      - name: Setup Android kernel build
+        run: |
+          repo init \
+            -u https://android.googlesource.com/kernel/manifest \
+            -b common-android13-5.15-lts \
+            --depth=1
+
+          repo sync --optimized-fetch --prune -j8
+
+          rm -rf .repo common
+
+          aria2c -x 16 -s 16 \
+            -o clang.tar.gz \
+            https://github.com/topnotchfreaks/clang/releases/download/v1.0.0/clang-r547379.tar.gz
+
+          mkdir -p prebuilts/clang/host/linux-x86/clang-r547379
+
+          tar -xzf clang.tar.gz \
+            -C prebuilts/clang/host/linux-x86/clang-r547379
+
+          rm -f clang.tar.gz
+
+          sed -i \
+            -e 's/^BRANCH=.*/BRANCH=android13-5.15/' \
+            -e 's/^CLANG_VERSION=.*/CLANG_VERSION=r547379/' \
+            kernel/build.config.constants
+
+          sed -i \
+            '/^POST_DEFCONFIG_CMDS="check_defconfig"/d' \
+            kernel/build.config.gki || true
+
+      - name: Enable USB WiFi drivers
+        working-directory: kernel
+        run: |
+          CONFIG=arch/arm64/configs/gki_defconfig
+
+          cat >> "$CONFIG" <<'EOF'
+
+          # USB WiFi
+          CONFIG_WLAN=y
+          CONFIG_CFG80211=y
+          CONFIG_MAC80211=y
+          CONFIG_USB=y
+
+          # Ralink / MediaTek RT5370
+          CONFIG_RT2X00=y
+          CONFIG_RT2800USB=y
+          CONFIG_RT2800USB_RT33XX=y
+          CONFIG_RT2800USB_RT35XX=y
+          CONFIG_RT2800USB_RT3573=y
+          CONFIG_RT2800USB_RT53XX=y
