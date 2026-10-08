@@ -11,13 +11,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y repo rsync aria2 zip
-
-          sudo fallocate -l 10G /swapfile
-          sudo chmod 600 /swapfile
-          sudo mkswap /swapfile
-          sudo swapon /swapfile
-
+          sudo apt-get install -y repo rsync aria2 
       - name: Clone YASK kernel source
         run: |
           git clone --recursive --depth=1 \
